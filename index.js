@@ -98,6 +98,10 @@ client.initialize().catch(err => {
 });
 
 // Endpoints da API
+app.get('/', (req, res) => {
+    res.send('<h2>Serviço de WhatsApp Huatek está ativo e rodando! 🚀</h2><p>Acesse a aba <strong>CRM / Funil</strong> no painel do LeadHunter para conectar seu celular.</p>');
+});
+
 app.get('/status', (req, res) => {
     res.json({
         status: connectionStatus,
