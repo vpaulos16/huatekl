@@ -2,6 +2,7 @@ const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const fs = require('fs');
 
 dotenv.config();
 
@@ -26,6 +27,10 @@ const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: './.wwebjs_auth'
     }),
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+    },
     puppeteer: {
         headless: true,
         // Configurações cruciais para rodar no Docker e ambientes Linux como Render
@@ -37,7 +42,10 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--single-process',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--disable-site-isolation-trials',
+            '--js-flags="--max-old-space-size=150"'
         ],
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     }
@@ -205,6 +213,38 @@ app.post('/restart', async (req, res) => {
     } catch (error) {
         console.error('Erro ao reiniciar serviço:', error);
         res.status(500).json({ error: error.message || 'Erro ao reiniciar serviço.' });
+    }
+});
+
+app.post('/reset', async (req, res) => {
+    try {
+        console.log('Resetando e limpando cache do WhatsApp...');
+        connectionStatus = 'connecting';
+        qrCode = null;
+        userInfo = null;
+        initError = null;
+        
+        try {
+            await client.destroy();
+        } catch (e) {
+            console.log('Erro ao destruir cliente (talvez já inativo):', e.message);
+        }
+
+        // Deleta pasta do cache de sessão
+        try {
+            if (fs.existsSync('./.wwebjs_auth')) {
+                fs.rmSync('./.wwebjs_auth', { recursive: true, force: true });
+                console.log('Pasta .wwebjs_auth deletada com sucesso.');
+            }
+        } catch (fsErr) {
+            console.error('Erro ao deletar pasta .wwebjs_auth:', fsErr.message);
+        }
+        
+        await client.initialize();
+        res.json({ success: true, message: 'Serviço resetado e cache limpo com sucesso.' });
+    } catch (error) {
+        console.error('Erro ao resetar serviço:', error);
+        res.status(500).json({ error: error.message || 'Erro ao resetar serviço.' });
     }
 });
 
