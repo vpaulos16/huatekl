@@ -39,7 +39,6 @@ const client = new Client({
             '--single-process',
             '--disable-gpu'
         ],
-        // Se houver caminho executável do Chrome injetado por variável de ambiente (Render)
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     }
 });
@@ -107,6 +106,30 @@ app.get('/status', (req, res) => {
     });
 });
 
+// Novo endpoint para solicitar o código de pareamento por telefone (sem QR Code)
+app.get('/pairing-code', async (req, res) => {
+    const { phone } = req.query;
+    
+    if (!phone) {
+        return res.status(400).json({ error: 'Parâmetro "phone" é obrigatório.' });
+    }
+
+    try {
+        // Limpa formatação do telefone
+        let cleanPhone = phone.replace(/\D/g, '');
+        if (!cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+            cleanPhone = '55' + cleanPhone;
+        }
+
+        console.log(`Solicitando código de pareamento para: ${cleanPhone}`);
+        const code = await client.requestPairingCode(cleanPhone);
+        res.json({ success: true, code });
+    } catch (error) {
+        console.error('Erro ao solicitar código de pareamento:', error);
+        res.status(500).json({ error: error.message || 'Erro ao gerar código de pareamento.' });
+    }
+});
+
 app.post('/send', async (req, res) => {
     const { phone, message } = req.body;
     
@@ -115,33 +138,23 @@ app.post('/send', async (req, res) => {
     }
 
     if (connectionStatus !== 'connected') {
-        return res.status(400).json({ error: 'WhatsApp não está conectado. Por favor, conecte via QR Code.' });
+        return res.status(400).json({ error: 'WhatsApp não está conectado. Por favor, conecte via QR Code ou código de pareamento.' });
     }
 
     try {
-        // Limpa formatação do telefone (apenas números)
+        // Limpa formatação do telefone
         let cleanPhone = phone.replace(/\D/g, '');
-        
-        // Formata para o padrão exigido pelo whatsapp-web.js (DDI + DDD + Número)
-        // Se o usuário digitou sem DDI (ex: 14991475641) e tem 10 ou 11 dígitos, adiciona o DDI do Brasil (55)
         if (!cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
             cleanPhone = '55' + cleanPhone;
         }
 
-        // WhatsApp do Brasil tem regras complexas de 9º dígito:
-        // Números com 9º dígito antigos ou novos podem causar falha de envio.
-        // O whatsapp-web.js possui um método interno para validar ou formatar se um ID está registrado no WhatsApp:
         const formattedNumber = cleanPhone + '@c.us';
-        
         console.log(`Enviando mensagem para: ${formattedNumber}`);
         
-        // Verifica se o número de fato existe no WhatsApp
         const isRegistered = await client.isRegisteredUser(formattedNumber);
         if (!isRegistered) {
-            // Se falhar, pode ser por conta do 9º dígito. Vamos tentar remover o 9º dígito se for número do Brasil.
-            // Ex: 55 14 99147-5641 -> 55 14 9147-5641
             if (cleanPhone.startsWith('55') && cleanPhone.length === 13) {
-                const alternativePhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5); // Remove o 5º caractere (o '9' do DDD)
+                const alternativePhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
                 const alternativeFormatted = alternativePhone + '@c.us';
                 console.log(`Tentando número alternativo sem o 9º dígito: ${alternativeFormatted}`);
                 const isAlternativeRegistered = await client.isRegisteredUser(alternativeFormatted);
