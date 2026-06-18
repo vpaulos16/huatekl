@@ -208,11 +208,17 @@ app.post('/restart', async (req, res) => {
             console.log('Cliente já destruído ou erro ao destruir:', e.message);
         }
         
-        await client.initialize();
-        res.json({ success: true, message: 'Serviço reiniciado e inicializado com sucesso.' });
+        // Inicializa em segundo plano sem bloquear a resposta HTTP
+        client.initialize().catch(err => {
+            console.error('Erro na inicialização pós-reinício:', err);
+            connectionStatus = 'disconnected';
+            initError = err.message || 'Erro desconhecido na inicialização';
+        });
+
+        res.json({ success: true, message: 'Serviço reiniciando em segundo plano.' });
     } catch (error) {
-        console.error('Erro ao reiniciar serviço:', error);
-        res.status(500).json({ error: error.message || 'Erro ao reiniciar serviço.' });
+        console.error('Erro ao configurar reiniciar serviço:', error);
+        res.status(500).json({ error: error.message || 'Erro ao configurar reiniciar serviço.' });
     }
 });
 
@@ -240,11 +246,17 @@ app.post('/reset', async (req, res) => {
             console.error('Erro ao deletar pasta .wwebjs_auth:', fsErr.message);
         }
         
-        await client.initialize();
-        res.json({ success: true, message: 'Serviço resetado e cache limpo com sucesso.' });
+        // Inicializa em segundo plano sem bloquear a resposta HTTP
+        client.initialize().catch(err => {
+            console.error('Erro na inicialização pós-reset:', err);
+            connectionStatus = 'disconnected';
+            initError = err.message || 'Erro desconhecido na inicialização';
+        });
+
+        res.json({ success: true, message: 'Serviço resetado e reiniciando em segundo plano.' });
     } catch (error) {
-        console.error('Erro ao resetar serviço:', error);
-        res.status(500).json({ error: error.message || 'Erro ao resetar serviço.' });
+        console.error('Erro ao configurar resetar serviço:', error);
+        res.status(500).json({ error: error.message || 'Erro ao configurar resetar serviço.' });
     }
 });
 
